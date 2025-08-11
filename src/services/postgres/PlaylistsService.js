@@ -1,3 +1,4 @@
+//src/services/postgres/PlaylistsServices.js
 const { nanoid } = require('nanoid');
 const InvariantError = require('../../exceptions/InvariantError');
 const NotFoundError = require('../../exceptions/NotFoundError');
@@ -69,7 +70,7 @@ class PlaylistsService {
       throw new InvariantError('Lagu gagal ditambahkan ke playlist');
     }
 
-    // Mencatat aktivitas (BARU)
+    // Mencatat aktivitas
     await this.addPlaylistActivity(playlistId, songId, userId, 'add');
   }
 
@@ -113,7 +114,7 @@ class PlaylistsService {
       throw new InvariantError('Lagu gagal dihapus dari playlist');
     }
 
-    // Mencatat aktivitas (BARU)
+    // Mencatat aktivitas
     await this.addPlaylistActivity(playlistId, songId, userId, 'delete');
   }
 
@@ -171,6 +172,39 @@ class PlaylistsService {
     };
     const result = await this._pool.query(query);
     return result.rows;
+  }
+
+  // Method untuk export playlist
+  async getPlaylistById(playlistId) {
+    const playlistQuery = {
+      text: `SELECT p.id, p.name
+               FROM playlists p
+               WHERE p.id = $1`,
+      values: [playlistId],
+    };
+
+    const songsQuery = {
+      text: `SELECT s.id, s.title, s.performer
+               FROM songs s
+               JOIN playlist_songs ps ON s.id = ps.song_id
+               WHERE ps.playlist_id = $1`,
+      values: [playlistId],
+    };
+
+    const playlistResult = await this._pool.query(playlistQuery);
+    if (playlistResult.rows.length === 0) {
+      throw new NotFoundError('Playlist tidak ditemukan');
+    }
+
+    const songsResult = await this._pool.query(songsQuery);
+
+    return {
+      playlist: {
+        id: playlistResult.rows[0].id,
+        name: playlistResult.rows[0].name,
+        songs: songsResult.rows,
+      },
+    };
   }
 }
 
