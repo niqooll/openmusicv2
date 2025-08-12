@@ -2,6 +2,7 @@
 const autoBind = require('auto-bind');
 const fs = require('fs');
 const path = require('path');
+const InvariantError = require('../../exceptions/InvariantError');
 
 class AlbumsHandler {
   constructor(service, storageService, validator, uploadValidator) {
@@ -63,66 +64,29 @@ class AlbumsHandler {
   }
 
   async postUploadImageHandler(request, h) {
-    console.log('=== UPLOAD DEBUG START ===');
-    console.log('Request payload:', request.payload);
-    console.log('Request headers:', request.headers);
-    
+    if (!request.payload) {
+      throw new InvariantError('Gagal mengunggah gambar karena payload kosong');
+    }
+
     const { cover } = request.payload;
     const { id } = request.params;
-
-    // Debug payload structure
-    if (!cover) {
-      console.log('❌ Cover is undefined in payload');
-      throw new Error('Cover file is required');
-    }
-
-    console.log('Cover object:', cover);
-    console.log('Cover constructor:', cover.constructor.name);
     
-    // Debug hapi info
-    if (cover.hapi) {
-      console.log('Cover hapi info:', cover.hapi);
-      console.log('Cover hapi headers:', cover.hapi.headers);
-      console.log('Cover hapi filename:', cover.hapi.filename);
-    } else {
-      console.log('❌ Cover.hapi is undefined');
+    if (!cover || !cover.hapi) {
+      throw new InvariantError('Tidak ada berkas yang diunggah pada field "cover"');
     }
 
-    // Validasi apakah album ada terlebih dahulu
+    this._uploadValidator.validateImageHeaders(cover.hapi.headers);
     await this._service.getAlbumById(id);
 
-    // Validasi headers dengan better error handling
-    try {
-      if (!cover.hapi || !cover.hapi.headers) {
-        throw new Error('File headers are missing');
-      }
-      
-      console.log('Validating headers:', cover.hapi.headers);
-      this._uploadValidator.validateImageHeaders(cover.hapi.headers);
-      console.log('✅ Headers validation passed');
-    } catch (error) {
-      console.error('❌ Validation failed:', error.message);
-      console.log('=== UPLOAD DEBUG END ===');
-      throw error;
-    }
-
     let coverUrl;
-
     if (process.env.AWS_BUCKET_NAME) {
-      // Upload ke S3
-      console.log('Uploading to S3...');
       coverUrl = await this._storageService.uploadFile(cover, cover.hapi);
     } else {
-      // Upload ke local storage
-      console.log('Uploading to local storage...');
       const filename = await this._storageService.writeFile(cover, cover.hapi);
       coverUrl = `http://${process.env.HOST}:${process.env.PORT}/upload/images/${filename}`;
     }
-
-    console.log('Cover URL:', coverUrl);
-
+    
     await this._service.addAlbumCover(id, coverUrl);
-    console.log('=== UPLOAD DEBUG END ===');
 
     const response = h.response({
       status: 'success',
