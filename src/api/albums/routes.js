@@ -29,13 +29,10 @@ const routes = (handler) => [
     options: {
       payload: {
         maxBytes: 512 * 1024, // 512 KB
+        output: 'stream',
         parse: true,
-        timeout: false, // Tambahkan ini jika sebelumnya terhapus
-        multipart: {
-          output: 'stream',
-        },
+        multipart: true,
       },
-      // Tambahkan CORS jika diperlukan
       cors: {
         origin: ['*'],
         headers: ['Accept', 'Authorization', 'Content-Type', 'If-None-Match'],

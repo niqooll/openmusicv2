@@ -1,7 +1,4 @@
-//src/api/albums/handler.js
 const autoBind = require('auto-bind');
-const fs = require('fs');
-const path = require('path');
 const InvariantError = require('../../exceptions/InvariantError');
 
 class AlbumsHandler {
@@ -16,9 +13,7 @@ class AlbumsHandler {
   async postAlbumHandler(request, h) {
     this._validator.validateAlbumPayload(request.payload);
     const { name, year } = request.payload;
-
     const albumId = await this._service.addAlbum({ name, year });
-
     const response = h.response({
       status: 'success',
       data: {
@@ -32,7 +27,6 @@ class AlbumsHandler {
   async getAlbumByIdHandler(request) {
     const { id } = request.params;
     const album = await this._service.getAlbumWithSongs(id);
-
     return {
       status: 'success',
       data: {
@@ -44,9 +38,7 @@ class AlbumsHandler {
   async putAlbumByIdHandler(request) {
     this._validator.validateAlbumPayload(request.payload);
     const { id } = request.params;
-
     await this._service.editAlbumById(id, request.payload);
-
     return {
       status: 'success',
       message: 'Album berhasil diperbarui',
@@ -56,7 +48,6 @@ class AlbumsHandler {
   async deleteAlbumByIdHandler(request) {
     const { id } = request.params;
     await this._service.deleteAlbumById(id);
-
     return {
       status: 'success',
       message: 'Album berhasil dihapus',
@@ -64,29 +55,30 @@ class AlbumsHandler {
   }
 
   async postUploadImageHandler(request, h) {
-    if (!request.payload) {
-      throw new InvariantError('Gagal mengunggah gambar karena payload kosong');
+    // Dengan konfigurasi rute Anda, payload adalah stream itu sendiri, bukan objek.
+    const data = request.payload;
+    const { id: albumId } = request.params;
+
+    // Pastikan payload (stream) memiliki metadata .hapi
+    if (!data || !data.hapi) {
+      throw new InvariantError('Payload atau metadata file tidak valid');
     }
 
-    const { cover } = request.payload;
-    const { id } = request.params;
+    const { headers, filename } = data.hapi;
+
+    // Validasi tipe file dari header stream
+    this._uploadValidator.validateImageHeaders(headers);
+
+    // Cek album
+    await this._service.getAlbumById(albumId);
+
+    // Tulis file menggunakan stream dan metadatanya
+    const fileLocation = await this._storageService.writeFile(data, { filename, headers });
     
-    if (!cover || !cover.hapi) {
-      throw new InvariantError('Tidak ada berkas yang diunggah pada field "cover"');
-    }
-
-    this._uploadValidator.validateImageHeaders(cover.hapi.headers);
-    await this._service.getAlbumById(id);
-
-    let coverUrl;
-    if (process.env.AWS_BUCKET_NAME) {
-      coverUrl = await this._storageService.uploadFile(cover, cover.hapi);
-    } else {
-      const filename = await this._storageService.writeFile(cover, cover.hapi);
-      coverUrl = `http://${process.env.HOST}:${process.env.PORT}/upload/images/${filename}`;
-    }
+    // Bentuk URL lengkap
+    const coverUrl = `http://${process.env.HOST}:${process.env.PORT}/upload/images/${fileLocation}`;
     
-    await this._service.addAlbumCover(id, coverUrl);
+    await this._service.addAlbumCover(albumId, coverUrl);
 
     const response = h.response({
       status: 'success',
@@ -99,9 +91,7 @@ class AlbumsHandler {
   async postLikeAlbumHandler(request, h) {
     const { id: albumId } = request.params;
     const { id: userId } = request.auth.credentials;
-
     await this._service.addAlbumLike(userId, albumId);
-
     const response = h.response({
       status: 'success',
       message: 'Album berhasil disukai',
@@ -113,9 +103,7 @@ class AlbumsHandler {
   async deleteLikeAlbumHandler(request) {
     const { id: albumId } = request.params;
     const { id: userId } = request.auth.credentials;
-
     await this._service.deleteAlbumLike(userId, albumId);
-
     return {
       status: 'success',
       message: 'Album batal disukai',
@@ -124,20 +112,16 @@ class AlbumsHandler {
 
   async getAlbumLikesHandler(request, h) {
     const { id: albumId } = request.params;
-    
     const { likes, source } = await this._service.getAlbumLikes(albumId);
-
     const response = h.response({
       status: 'success',
       data: {
         likes,
       },
     });
-
     if (source === 'cache') {
       response.header('X-Data-Source', 'cache');
     }
-
     return response;
   }
 }
