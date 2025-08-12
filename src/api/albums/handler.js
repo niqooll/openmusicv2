@@ -63,23 +63,66 @@ class AlbumsHandler {
   }
 
   async postUploadImageHandler(request, h) {
+    console.log('=== UPLOAD DEBUG START ===');
+    console.log('Request payload:', request.payload);
+    console.log('Request headers:', request.headers);
+    
     const { cover } = request.payload;
     const { id } = request.params;
 
-    this._uploadValidator.validateImageHeaders(cover.hapi.headers);
+    // Debug payload structure
+    if (!cover) {
+      console.log('❌ Cover is undefined in payload');
+      throw new Error('Cover file is required');
+    }
+
+    console.log('Cover object:', cover);
+    console.log('Cover constructor:', cover.constructor.name);
+    
+    // Debug hapi info
+    if (cover.hapi) {
+      console.log('Cover hapi info:', cover.hapi);
+      console.log('Cover hapi headers:', cover.hapi.headers);
+      console.log('Cover hapi filename:', cover.hapi.filename);
+    } else {
+      console.log('❌ Cover.hapi is undefined');
+    }
+
+    // Validasi apakah album ada terlebih dahulu
+    await this._service.getAlbumById(id);
+
+    // Validasi headers dengan better error handling
+    try {
+      if (!cover.hapi || !cover.hapi.headers) {
+        throw new Error('File headers are missing');
+      }
+      
+      console.log('Validating headers:', cover.hapi.headers);
+      this._uploadValidator.validateImageHeaders(cover.hapi.headers);
+      console.log('✅ Headers validation passed');
+    } catch (error) {
+      console.error('❌ Validation failed:', error.message);
+      console.log('=== UPLOAD DEBUG END ===');
+      throw error;
+    }
 
     let coverUrl;
 
     if (process.env.AWS_BUCKET_NAME) {
       // Upload ke S3
+      console.log('Uploading to S3...');
       coverUrl = await this._storageService.uploadFile(cover, cover.hapi);
     } else {
       // Upload ke local storage
+      console.log('Uploading to local storage...');
       const filename = await this._storageService.writeFile(cover, cover.hapi);
       coverUrl = `http://${process.env.HOST}:${process.env.PORT}/upload/images/${filename}`;
     }
 
+    console.log('Cover URL:', coverUrl);
+
     await this._service.addAlbumCover(id, coverUrl);
+    console.log('=== UPLOAD DEBUG END ===');
 
     const response = h.response({
       status: 'success',

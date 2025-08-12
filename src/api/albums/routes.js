@@ -28,10 +28,17 @@ const routes = (handler) => [
     handler: handler.postUploadImageHandler,
     options: {
       payload: {
-      maxBytes: 512 * 1024, // 512 KB
-      allow: ['image/apng', 'image/avif', 'image/gif', 'image/jpeg', 'image/png', 'image/svg+xml', 'image/webp'],
-      multipart: true,
-      output: 'stream',
+        maxBytes: 512 * 1024, // 512 KB
+        output: 'stream',
+        parse: true,
+        multipart: true,
+        // Hilangkan 'allow' karena dapat menyebabkan konflik
+        timeout: false,
+      },
+      // Tambahkan CORS jika diperlukan
+      cors: {
+        origin: ['*'],
+        headers: ['Accept', 'Authorization', 'Content-Type', 'If-None-Match'],
       },
     },
   },
@@ -62,6 +69,8 @@ const routes = (handler) => [
     handler: {
       directory: {
         path: path.resolve(__dirname, '../../../uploads'),
+        redirectToSlash: true,
+        index: false,
       },
     },
   },
